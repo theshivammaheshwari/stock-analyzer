@@ -1,117 +1,173 @@
 # app.py
 import streamlit as st
+import requests
+from bs4 import BeautifulSoup
+import pandas as pd
 import yfinance as yf
 import ta
-import pandas as pd
 
-st.set_page_config(page_title="Stock Analysis Tool", page_icon="📊", layout="wide")
+# ------------------
+# Function: Fundamentals Scraper from Screener.in
+# ------------------
+def screener_fundamentals(stock_code):
+    url = f"https://www.screener.in/company/{stock_code}/"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    r = requests.get(url, headers=headers)
+    soup = BeautifulSoup(r.text, "html.parser")
 
-st.title("📊 Stock Analysis Tool (Swing / Positional)")
+    fundamentals = {}
 
-# ------ User Input ------
-ticker_input = st.text_input("Enter Stock Symbol (e.g. RELIANCE, TCS, INFY)", "RELIANCE")
+    # ----- Top Key Ratios
+    ratios_box = soup.find("div", class_="company-ratios")
+    if ratios_box:
+        rows = ratios_box.find_all("li")
+        for row in rows:
+            try:
+                key = row.find("span", class_="name").get_text(strip=True)
+                val = row.find("span", class_="value").get_text(strip=True)
+                fundamentals[key] = val
+            except:
+                pass
 
-# Automatically append .NS for Indian stocks (if not already provided)
-if ticker_input and not ticker_input.endswith(".NS") and "." not in ticker_input:
-    ticker = ticker_input.upper() + ".NS"
-else:
-    ticker = ticker_input.upper()
+    # ----- Factoids
+    factoids = soup.find_all("li", class_="flex flex-space-between")
+    for f in factoids:
+        try:
+            key = f.find("span", class_="name").get_text(strip=True)
+            val = f.find("span", class_="value").get_text(strip=True)
+            fundamentals[key] = val
+        except:
+            pass
 
-st.write(f"Selected Ticker: **{ticker}**")
+    # ----- Shareholding
+    holding_section = soup.find("section", id="shareholding")
+    if holding_section:
+        rows = holding_section.find_all("tr")
+        for row in rows:
+            cols = [c.get_text(strip=True) for c in row.find_all("td")]
+            if len(cols) >= 2:
+                fundamentals[cols[0]] = cols[1]
 
-# ------ Fetch Data ------
-if st.button("Analyze"):
-    with st.spinner("Fetching data..."):
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period="6mo", interval="1d")
+    return fundamentals
 
-        if hist.empty:
-            st.error("⚠️ No data found. Check ticker symbol.")
-        else:
-            # ----- Indicators -----
-            hist["EMA10"] = hist["Close"].ewm(span=10).mean()
-            hist["EMA20"] = hist["Close"].ewm(span=20).mean()
-            hist["RSI"]   = ta.momentum.RSIIndicator(hist["Close"], window=14).rsi()
-            
-            macd = ta.trend.MACD(hist["Close"])
-            hist["MACD"]        = macd.macd()
-            hist["MACD_Signal"] = macd.macd_signal()
-            
-            atr = ta.volatility.AverageTrueRange(hist["High"], hist["Low"], hist["Close"], window=14)
-            hist["ATR"] = atr.average_true_range()
-            
-            hist["Vol_Avg20"] = hist["Volume"].rolling(20).mean()
 
-            latest = hist.iloc[-1]
-            prev   = hist.iloc[-2]
+# ------------------
+# Function: Technicals from yfinance
+# ------------------
+def technicals_analysis(ticker_input):
+    # Auto append .NS
+    if not ticker_input.endswith(".NS") and "." not in ticker_input:
+        ticker = ticker_input + ".NS"
+    else:
+        ticker = ticker_input
 
-            # ---- Pivot Points ----
-            P = (latest["High"] + latest["Low"] + latest["Close"]) / 3
-            R1 = 2*P - latest["Low"];  S1 = 2*P - latest["High"]
-            R2 = P + (latest["High"] - latest["Low"]);  S2 = P - (latest["High"] - latest["Low"])
-            R3 = latest["High"] + 2*(P - latest["Low"]); S3 = latest["Low"] - 2*(latest["High"] - P)
+    stock = yf.Ticker(ticker)
+    hist = stock.history(period="6mo", interval="1d")
 
-            # ---- Voting ----
-            signals = []
-            if latest["EMA10"] > latest["EMA20"]: signals.append("Buy")
-            elif latest["EMA10"] < latest["EMA20"]: signals.append("Sell")
+    if hist.empty:
+        return None, None
 
-            if latest["RSI"] > 60: signals.append("Buy")
-            elif latest["RSI"] < 40: signals.append("Sell")
+    hist["EMA10"] = hist["Close"].ewm(span=10).mean()
+    hist["EMA20"] = hist["Close"].ewm(span=20).mean()
+    hist["RSI"]   = ta.momentum.RSIIndicator(hist["Close"], window=14).rsi()
 
-            if latest["MACD"] > latest["MACD_Signal"]: signals.append("Buy")
-            elif latest["MACD"] < latest["MACD_Signal"]: signals.append("Sell")
+    macd = ta.trend.MACD(hist["Close"])
+    hist["MACD"]        = macd.macd()
+    hist["MACD_Signal"] = macd.macd_signal()
 
-            if latest["Volume"] > latest["Vol_Avg20"]: signals.append("Buy")
+    atr = ta.volatility.AverageTrueRange(hist["High"], hist["Low"], hist["Close"], window=14)
+    hist["ATR"] = atr.average_true_range()
 
-            # Candle Pattern
-            candle_signal = "None"
-            if (latest["Close"] > latest["Open"] and prev["Close"] < prev["Open"] 
-                and latest["Close"] > prev["Open"] and latest["Open"] < prev["Close"]):
-                candle_signal = "Bullish Engulfing"; signals.append("Buy")
-            elif (latest["Close"] < latest["Open"] and prev["Close"] > prev["Open"] 
-                and latest["Close"] < prev["Open"] and latest["Open"] > prev["Close"]):
-                candle_signal = "Bearish Engulfing"; signals.append("Sell")
+    latest = hist.iloc[-1]
+    prev   = hist.iloc[-2]
 
-            buy_votes  = signals.count("Buy")
-            sell_votes = signals.count("Sell")
-            total_votes = buy_votes + sell_votes
+    # Pivot
+    P = (latest["High"] + latest["Low"] + latest["Close"]) / 3
+    R1 = 2*P - latest["Low"];  S1 = 2*P - latest["High"]
+    R2 = P + (latest["High"] - latest["Low"]);  S2 = P - (latest["High"] - latest["Low"])
+    R3 = latest["High"] + 2*(P - latest["Low"]); S3 = latest["Low"] - 2*(latest["High"] - P)
 
-            if buy_votes > sell_votes: final_signal = "Buy"
-            elif sell_votes > buy_votes: final_signal = "Sell"
-            else: final_signal = "Hold"
+    signals = []
+    if latest["EMA10"] > latest["EMA20"]: signals.append("Buy")
+    elif latest["EMA10"] < latest["EMA20"]: signals.append("Sell")
 
-            if final_signal == "Buy":
-                strength = f"Strong Buy ({buy_votes}/{total_votes})" if total_votes and buy_votes>=0.75*total_votes else f"Weak Buy ({buy_votes}/{total_votes})"
-            elif final_signal == "Sell":
-                strength = f"Strong Sell ({sell_votes}/{total_votes})" if total_votes and sell_votes>=0.75*total_votes else f"Weak Sell ({sell_votes}/{total_votes})"
-            else:
-                strength = "Neutral"
+    if latest["RSI"] > 60: signals.append("Buy")
+    elif latest["RSI"] < 40: signals.append("Sell")
 
-            stoploss = None
-            if final_signal=="Buy":
-                stoploss = round(latest["Close"] - 1.5*latest["ATR"], 2)
-            elif final_signal=="Sell":
-                stoploss = round(latest["Close"] + 1.5*latest["ATR"], 2)
+    if latest["MACD"] > latest["MACD_Signal"]: signals.append("Buy")
+    elif latest["MACD"] < latest["MACD_Signal"]: signals.append("Sell")
 
-            # ---- Show Output ----
-            st.subheader("📊 Latest Analysis Summary")
-            st.write(f"**Open:** {round(latest['Open'],2)} | **High:** {round(latest['High'],2)} | **Low:** {round(latest['Low'],2)} | **Close:** {round(latest['Close'],2)}")
-            st.write(f"**EMA10:** {round(latest['EMA10'],2)} | **EMA20:** {round(latest['EMA20'],2)}")
-            st.write(f"**RSI:** {round(latest['RSI'],2)} | **MACD:** {round(latest['MACD'],2)} | **MACD_Signal:** {round(latest['MACD_Signal'],2)}")
-            st.write(f"**ATR:** {round(latest['ATR'],2)} | **20d Avg Vol:** {round(latest['Vol_Avg20'],2)}")
-            st.write(f"**Candle Pattern:** {candle_signal}")
-            st.success(f"**Signal: {final_signal} | Strength: {strength}**")
-            if stoploss: st.warning(f"**Suggested Stoploss:** {stoploss}")
+    if latest["Close"] > latest["EMA20"] and latest["Volume"] > hist["Volume"].rolling(20).mean().iloc[-1]:
+        signals.append("Buy")
 
-            st.subheader("📌 Pivot Levels")
-            st.write(f"Pivot: {round(P,2)} | R1: {round(R1,2)} | R2: {round(R2,2)} | R3: {round(R3,2)} | S1: {round(S1,2)} | S2: {round(S2,2)} | S3: {round(S3,2)}")
+    candle_signal = "None"
+    if (latest["Close"] > latest["Open"] and prev["Close"] < prev["Open"]
+        and latest["Close"] > prev["Open"] and latest["Open"] < prev["Close"]):
+        candle_signal = "Bullish Engulfing"; signals.append("Buy")
+    elif (latest["Close"] < latest["Open"] and prev["Close"] > prev["Open"]
+        and latest["Close"] < prev["Open"] and latest["Open"] > prev["Close"]):
+        candle_signal = "Bearish Engulfing"; signals.append("Sell")
 
-            # 📈 Chart
-            st.subheader("📈 Price Chart (6 months)")
-            chart_data = hist[["Close","EMA10","EMA20"]].round(2)
-            st.line_chart(chart_data)
+    buy_votes, sell_votes = signals.count("Buy"), signals.count("Sell")
+    total = buy_votes + sell_votes
 
-            # Raw Data Table (last 10 entries)
-            st.subheader("📑 Recent Data")
-            st.dataframe(hist.tail(10).round(2))
+    if buy_votes > sell_votes: final_signal = "Buy"
+    elif sell_votes > buy_votes: final_signal = "Sell"
+    else: final_signal = "Hold"
+
+    if final_signal == "Buy":
+        strength = f"Strong Buy ({buy_votes}/{total})" if total and buy_votes>=0.75*total else f"Weak Buy ({buy_votes}/{total})"
+    elif final_signal == "Sell":
+        strength = f"Strong Sell ({sell_votes}/{total})" if total and sell_votes>=0.75*total else f"Weak Sell ({sell_votes}/{total})"
+    else:
+        strength = "Neutral"
+
+    stoploss = None
+    if final_signal=="Buy": stoploss = round(latest["Close"] - 1.5*latest["ATR"], 2)
+    elif final_signal=="Sell": stoploss = round(latest["Close"] + 1.5*latest["ATR"], 2)
+
+    tech = {
+        "Open": round(latest["Open"],2), "High": round(latest["High"],2),
+        "Low": round(latest["Low"],2), "Close": round(latest["Close"],2),
+        "Volume": int(latest["Volume"]),
+        "EMA10": round(latest["EMA10"],2), "EMA20": round(latest["EMA20"],2),
+        "RSI": round(latest["RSI"],2), "MACD": round(latest["MACD"],2), "MACD_Signal": round(latest["MACD_Signal"],2),
+        "ATR": round(latest["ATR"],2),
+        "CandlePattern": candle_signal,
+        "Signal": final_signal, "Strength": strength,
+        "Stoploss": stoploss,
+        "Pivot": round(P,2), "R1": round(R1,2), "R2": round(R2,2), "R3": round(R3,2),
+        "S1": round(S1,2), "S2": round(S2,2), "S3": round(S3,2)
+    }
+
+    return tech, hist
+
+
+
+# ------------------
+# Streamlit UI
+# ------------------
+st.set_page_config(page_title="Stock Dashboard", page_icon="📊", layout="wide")
+st.title("📊 Indian Stock Dashboard (Fundamentals + Technicals)")
+
+# User input
+user_input = st.text_input("Enter stock code (example: RELIANCE, TCS, HDFCBANK)", "RELIANCE").upper()
+
+if st.button("Get Analysis"):
+    # Fundamentals
+    st.subheader("🏦 Fundamentals (from Screener.in)")
+    funds = screener_fundamentals(user_input)
+    if funds:
+        df_fund = pd.DataFrame(list(funds.items()), columns=["Field","Value"])
+        st.dataframe(df_fund)
+    else:
+        st.error("No fundamentals found (Screener scraping failed).")
+
+    # Technicals
+    st.subheader("📊 Technicals (yfinance)")
+    techs, hist = technicals_analysis(user_input)
+    if techs:
+        st.json(techs)  # show metrics
+        st.line_chart(hist[["Close","EMA10","EMA20"]]) # chart
+    else:
+        st.error("No technical data found.")

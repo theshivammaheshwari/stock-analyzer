@@ -2,5 +2,5 @@ streamlit
 yfinance
 pandas
 ta
-openpyxl
-finta
+beautifulsoup4
+requests
