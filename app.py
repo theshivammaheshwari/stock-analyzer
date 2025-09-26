@@ -6,9 +6,7 @@ import pandas as pd
 import yfinance as yf
 import ta
 
-# ------------------
-# Function: Fundamentals Scraper
-# ------------------
+# --------- Function: Fundamentals from Screener ---------
 def screener_fundamentals(stock_code):
     url = f"https://www.screener.in/company/{stock_code}/"
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -17,6 +15,7 @@ def screener_fundamentals(stock_code):
 
     fundamentals = {}
 
+    # Top ratios
     ratios_box = soup.find("div", class_="company-ratios")
     if ratios_box:
         rows = ratios_box.find_all("li")
@@ -28,6 +27,7 @@ def screener_fundamentals(stock_code):
             except:
                 pass
 
+    # Factoids (PEG, Z-score etc.)
     factoids = soup.find_all("li", class_="flex flex-space-between")
     for f in factoids:
         try:
@@ -37,6 +37,7 @@ def screener_fundamentals(stock_code):
         except:
             pass
 
+    # Shareholding pattern
     holding_section = soup.find("section", id="shareholding")
     if holding_section:
         rows = holding_section.find_all("tr")
@@ -48,9 +49,7 @@ def screener_fundamentals(stock_code):
     return fundamentals
 
 
-# ------------------
-# Function: Technicals (yfinance)
-# ------------------
+# --------- Function: Technical analysis ---------
 def technicals_analysis(ticker_input):
     if not ticker_input.endswith(".NS") and "." not in ticker_input:
         ticker = ticker_input + ".NS"
@@ -93,14 +92,16 @@ def technicals_analysis(ticker_input):
     if latest["MACD"] > latest["MACD_Signal"]: signals.append("Buy")
     elif latest["MACD"] < latest["MACD_Signal"]: signals.append("Sell")
 
-    if latest["Close"] > latest["EMA20"] and latest["Volume"] > hist["Volume"].rolling(20).mean().iloc[-1]:
+    # Current vs Avg Volume
+    if latest["Volume"] > hist["Volume"].rolling(20).mean().iloc[-1]:
         signals.append("Buy")
 
+    # Candlestick
     candle_signal = "None"
-    if (latest["Close"] > latest["Open"] and prev["Close"] < prev["Open"]
+    if (latest["Close"] > latest["Open"] and prev["Close"] < prev["Open"] 
         and latest["Close"] > prev["Open"] and latest["Open"] < prev["Close"]):
         candle_signal = "Bullish Engulfing"; signals.append("Buy")
-    elif (latest["Close"] < latest["Open"] and prev["Close"] > prev["Open"]
+    elif (latest["Close"] < latest["Open"] and prev["Close"] > prev["Open"] 
         and latest["Close"] < prev["Open"] and latest["Open"] > prev["Close"]):
         candle_signal = "Bearish Engulfing"; signals.append("Sell")
 
@@ -119,15 +120,18 @@ def technicals_analysis(ticker_input):
         strength = "Neutral"
 
     stoploss = None
-    if final_signal=="Buy": stoploss = round(latest["Close"] - 1.5*latest["ATR"], 2)
-    elif final_signal=="Sell": stoploss = round(latest["Close"] + 1.5*latest["ATR"], 2)
+    if final_signal=="Buy":
+        stoploss = round(latest["Close"] - 1.5*latest["ATR"], 2)
+    elif final_signal=="Sell":
+        stoploss = round(latest["Close"] + 1.5*latest["ATR"], 2)
 
     tech = {
         "Open": round(latest["Open"],2), "High": round(latest["High"],2),
         "Low": round(latest["Low"],2), "Close": round(latest["Close"],2),
         "Volume": int(latest["Volume"]),
         "EMA10": round(latest["EMA10"],2), "EMA20": round(latest["EMA20"],2),
-        "RSI": round(latest["RSI"],2), "MACD": round(latest["MACD"],2), "MACD_Signal": round(latest["MACD_Signal"],2),
+        "RSI": round(latest["RSI"],2), "MACD": round(latest["MACD"],2),
+        "MACD_Signal": round(latest["MACD_Signal"],2),
         "ATR": round(latest["ATR"],2), "CandlePattern": candle_signal,
         "Signal": final_signal, "Strength": strength, "Stoploss": stoploss,
         "Pivot": round(P,2), "R1": round(R1,2), "R2": round(R2,2), "R3": round(R3,2),
@@ -136,63 +140,63 @@ def technicals_analysis(ticker_input):
     return tech, hist
 
 
-# ------------------
-# Streamlit UI
-# ------------------
-st.set_page_config(page_title="Swing Trading + Fundamentals", page_icon="📊", layout="wide")
-
+# --------- Streamlit UI ---------
+st.set_page_config(page_title="Swing Trading + Fundamentals Dashboard", page_icon="📊", layout="wide")
 st.title("📊 Swing Trading + Fundamentals Dashboard")
 
-col1, col2 = st.columns([2,1])
+user_input = st.text_input("Enter stock symbol", "RELIANCE").upper()
+if st.button("Analyze"):
 
-with col1:
-    user_input = st.text_input("Enter stock code (e.g., RELIANCE, TCS, INFY)", "RELIANCE").upper()
-with col2:
-    st.write(" ")  # spacing
-    run = st.button("Run Analysis")
+    # -------- Swing Trading (Technicals) FIRST --------
+    st.header("📈 Swing Trading Analysis")
 
-if run:
-    # Fundamentals
-    st.subheader("Company Fundamentals")
-    funds = screener_fundamentals(user_input)
-    if funds:
-        df_fund = pd.DataFrame(list(funds.items()), columns=["Metric","Value"])
-        st.table(df_fund)
-    else:
-        st.warning("No fundamental data found.")
-
-    # Technicals
-    st.subheader("Technical Swing Analysis")
     techs, hist = technicals_analysis(user_input)
     if techs:
-        # Show key metrics like cards
-        mcol1, mcol2, mcol3, mcol4 = st.columns(4)
-        mcol1.metric("Close", techs["Close"])
-        mcol2.metric("EMA10", techs["EMA10"])
-        mcol3.metric("EMA20", techs["EMA20"])
-        mcol4.metric("RSI", techs["RSI"])
+        # show OHLC metrics
+        c1,c2,c3,c4 = st.columns(4)
+        c1.metric("Open", techs["Open"])
+        c2.metric("High", techs["High"])
+        c3.metric("Low", techs["Low"])
+        c4.metric("Close", techs["Close"])
 
-        ncol1, ncol2, ncol3 = st.columns(3)
-        ncol1.metric("MACD", techs["MACD"])
-        ncol2.metric("ATR", techs["ATR"])
-        ncol3.metric("Volume", techs["Volume"])
+        # More key indicators in row2
+        r1,r2,r3,r4 = st.columns(4)
+        r1.metric("EMA10", techs["EMA10"])
+        r2.metric("EMA20", techs["EMA20"])
+        r3.metric("RSI", techs["RSI"])
+        r4.metric("Volume", techs["Volume"])
 
-        # Signal
-        st.success(f"**Signal:** {techs['Signal']} | **Strength:** {techs['Strength']}")
+        r5,r6,r7 = st.columns(3)
+        r5.metric("MACD", techs["MACD"])
+        r6.metric("MACD Signal", techs["MACD_Signal"])
+        r7.metric("ATR", techs["ATR"])
+
+        # Signal highlight
+        st.success(f"Signal: {techs['Signal']} | Strength: {techs['Strength']}")
         st.info(f"Candle Pattern: {techs['CandlePattern']}")
         if techs["Stoploss"]:
             st.warning(f"Suggested Stoploss: {techs['Stoploss']}")
 
-        # Pivot Table
+        # Pivot table (colorful)
         st.subheader("Pivot Levels")
         piv_df = pd.DataFrame({
             "Level":["Pivot","R1","R2","R3","S1","S2","S3"],
-            "Value":[techs["Pivot"],techs["R1"],techs["R2"],techs["R3"],techs["S1"],techs["S2"],techs["S3"]]
+            "Value":[techs["Pivot"],techs["R1"],techs["R2"],
+                    techs["R3"],techs["S1"],techs["S2"],techs["S3"]]
         })
-        st.table(piv_df)
+        st.dataframe(piv_df.style.background_gradient(cmap="YlGnBu"), use_container_width=True)
 
         # Chart
         st.subheader("Price Chart (6 months)")
         st.line_chart(hist[["Close","EMA10","EMA20"]])
     else:
-        st.error("No technical data found.")
+        st.error("❌ No technical data found.")
+
+    # -------- Fundamentals (after technicals) --------
+    st.header("🏦 Fundamentals")
+    funds = screener_fundamentals(user_input)
+    if funds:
+        df_fund = pd.DataFrame(list(funds.items()), columns=["Metric","Value"])
+        st.dataframe(df_fund.style.background_gradient(cmap="Oranges"), use_container_width=True)
+    else:
+        st.warning("No fundamentals found.")
