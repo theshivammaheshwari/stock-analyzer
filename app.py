@@ -5,7 +5,7 @@ import pandas as pd
 import yfinance as yf
 import ta
 
-# --------- Fundamentals Scraper ---------
+# --------- Scrape Fundamentals from Screener ---------
 def screener_fundamentals(stock_code):
     url = f"https://www.screener.in/company/{stock_code}/"
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -26,7 +26,7 @@ def screener_fundamentals(stock_code):
             except:
                 pass
 
-    # Extra factoids (PEG, Z-score etc.)
+    # Extra factoids (PEG, Altman etc.)
     factoids = soup.find_all("li", class_="flex flex-space-between")
     for f in factoids:
         try:
@@ -93,6 +93,7 @@ def technicals_analysis(ticker_input):
     if latest["MACD"] > latest["MACD_Signal"]: signals.append("Buy")
     elif latest["MACD"] < latest["MACD_Signal"]: signals.append("Sell")
 
+    # Current vs Avg Volume
     if latest["Volume"] > hist["Volume"].rolling(20).mean().iloc[-1]:
         signals.append("Buy")
 
@@ -154,7 +155,7 @@ with st.sidebar:
     st.write("🔗 [LinkedIn](https://www.linkedin.com/in/theshivammaheshwari)")
     st.write("📸 [Instagram](https://www.instagram.com/theshivammaheshwari)")
     st.write("📘 [Facebook](https://www.facebook.com/theshivammaheshwari)")
-    st.write("✉️ 247shivam@gmail.com")
+    st.write("✉️ theshivammaheshwari@gmail.com")
     st.write("📱 +91-9468955596")
 
 # --- Input box ---
@@ -167,15 +168,17 @@ if st.button("Analyze"):
     techs, hist = technicals_analysis(user_input)
     if techs:
 
-        # ✅ Highlight important 4 features up-front (Candle, Signal, Strength, Stoploss)
+        # ✅ Key Highlights as row table
         st.subheader("🔎 Key Trade Highlights")
-        c1,c2,c3,c4 = st.columns(4)
-        c1.metric("Candle Pattern", techs["CandlePattern"])
-        c2.metric("Signal", techs["Signal"])
-        c3.metric("Strength", techs["Strength"])
-        c4.metric("Stoploss", techs["Stoploss"] if techs["Stoploss"] else "NA")
+        key_high_data = pd.DataFrame([{
+            "Candle Pattern": techs["CandlePattern"],
+            "Signal": techs["Signal"],
+            "Strength": techs["Strength"],
+            "Stoploss": techs["Stoploss"] if techs["Stoploss"] else "NA"
+        }])
+        st.table(key_high_data)   # Static clean table
 
-        # Then show rest data in a table
+        # Detailed Technicals
         st.subheader("📊 Detailed Technicals")
         tech_df = pd.DataFrame([
             ["Open", techs["Open"]],
@@ -191,9 +194,9 @@ if st.button("Analyze"):
             ["ATR", techs["ATR"]],
         ], columns=["Metric","Value"])
 
-        st.dataframe(tech_df.style.background_gradient(cmap="YlGnBu"), use_container_width=True)
+        st.dataframe(tech_df, use_container_width=True)   # no gradient, clean Volume
 
-        # Pivot table
+        # Pivot Levels
         piv_df = pd.DataFrame({
             "Level":["Pivot","R1","R2","R3","S1","S2","S3"],
             "Value":[techs["Pivot"],techs["R1"],techs["R2"],techs["R3"],
