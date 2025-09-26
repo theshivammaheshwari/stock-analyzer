@@ -5,7 +5,7 @@ import pandas as pd
 import yfinance as yf
 import ta
 
-# --------- Fundamentals Scraper from Screener ---------
+# --------- Fundamentals Scraper (from Screener.in) ---------
 def screener_fundamentals(stock_code):
     url = f"https://www.screener.in/company/{stock_code}/"
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -26,7 +26,7 @@ def screener_fundamentals(stock_code):
             except:
                 pass
 
-    # Extra factoids
+    # Factoids (PEG, Altman etc.)
     factoids = soup.find_all("li", class_="flex flex-space-between")
     for f in factoids:
         try:
@@ -48,8 +48,9 @@ def screener_fundamentals(stock_code):
     return fundamentals
 
 
-# --------- Technical Analysis from yfinance ---------
+# --------- Technical Analysis (yfinance) ---------
 def technicals_analysis(ticker_input):
+    # add .NS if Indian stock
     if not ticker_input.endswith(".NS") and "." not in ticker_input:
         ticker = ticker_input + ".NS"
     else:
@@ -157,22 +158,21 @@ with st.sidebar:
     st.write("✉️ theshivammaheshwari@gmail.com")
     st.write("📱 +91-9468955596")
 
-# 🔹 Load CSV that has SYMBOL and NAME OF COMPANY columns
-symbols_df = pd.read_csv("nse_stock_list.csv")
+# -------- Load stock list CSV (with Symbol + NAME OF COMPANY columns) --------
+symbols_df = pd.read_csv("nse_stock_list.csv")   # CSV file in repo
+all_stock_codes = symbols_df["Symbol"].dropna().astype(str).tolist()
+symbol_to_name = dict(zip(symbols_df["Symbol"], symbols_df["NAME OF COMPANY"]))
 
-all_stock_codes = symbols_df["SYMBOL"].dropna().astype(str).tolist()   # dropdown list
-symbol_to_name = dict(zip(symbols_df["SYMBOL"], symbols_df["NAME OF COMPANY"]))  # mapping dict
-
-# 🔹 Auto-suggest search dropdown
+# -------- Dropdown search box --------
 user_input = st.selectbox("🔍 Search or select stock symbol:", all_stock_codes)
 
 if st.button("Analyze"):
     company_name = symbol_to_name.get(user_input, "")
     st.header(f"📈 Swing Trading Analysis - {company_name} ({user_input})")
 
+    # ---- Technicals ----
     techs, hist = technicals_analysis(user_input)
     if techs:
-        # 🔎 Key Highlights
         st.subheader("🔎 Key Trade Highlights")
         key_high_data = pd.DataFrame([{
             "Candle Pattern": techs["CandlePattern"],
@@ -193,7 +193,7 @@ if st.button("Analyze"):
         styled_high = styled_high.hide(axis="index")
         st.table(styled_high)
 
-        # Detailed Technicals
+        # Detailed Technicals table
         st.subheader("📊 Detailed Technicals")
         tech_df = pd.DataFrame([
             ["Open", techs["Open"]],
@@ -224,10 +224,11 @@ if st.button("Analyze"):
         # Chart
         st.subheader("Price Chart (6 months)")
         st.line_chart(hist[["Close","EMA10","EMA20"]])
+
     else:
         st.error("❌ No technical data found.")
 
-    # -------- Fundamentals --------
+    # ---- Fundamentals ----
     st.header(f"🏦 Fundamentals - {company_name} ({user_input})")
     funds = screener_fundamentals(user_input)
     if funds:
