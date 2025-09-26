@@ -155,7 +155,7 @@ with st.sidebar:
     st.write("🔗 [LinkedIn](https://www.linkedin.com/in/theshivammaheshwari)")
     st.write("📸 [Instagram](https://www.instagram.com/theshivammaheshwari)")
     st.write("📘 [Facebook](https://www.facebook.com/theshivammaheshwari)")
-    st.write("✉️ theshivammaheshwari@gmail.com")
+    st.write("✉️ 247shivam@gmail.com")
     st.write("📱 +91-9468955596")
 
 # -------- Load stock list CSV (with Symbol + NAME OF COMPANY columns) --------
