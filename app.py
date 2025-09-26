@@ -26,7 +26,7 @@ def screener_fundamentals(stock_code):
             except:
                 pass
 
-    # Extra factoids (PEG, Altman etc.)
+    # Extra factoids
     factoids = soup.find_all("li", class_="flex flex-space-between")
     for f in factoids:
         try:
@@ -36,7 +36,7 @@ def screener_fundamentals(stock_code):
         except:
             pass
 
-    # Shareholding pattern
+    # Shareholding
     holding_section = soup.find("section", id="shareholding")
     if holding_section:
         rows = holding_section.find_all("tr")
@@ -82,7 +82,7 @@ def technicals_analysis(ticker_input):
     R2 = P + (latest["High"] - latest["Low"]);  S2 = P - (latest["High"] - latest["Low"])
     R3 = latest["High"] + 2*(P - latest["Low"]); S3 = latest["Low"] - 2*(latest["High"] - P)
 
-    # ---- Voting signals ----
+    # Voting signals
     signals = []
     if latest["EMA10"] > latest["EMA20"]: signals.append("Buy")
     elif latest["EMA10"] < latest["EMA20"]: signals.append("Sell")
@@ -93,7 +93,6 @@ def technicals_analysis(ticker_input):
     if latest["MACD"] > latest["MACD_Signal"]: signals.append("Buy")
     elif latest["MACD"] < latest["MACD_Signal"]: signals.append("Sell")
 
-    # Current vs Avg Volume
     if latest["Volume"] > hist["Volume"].rolling(20).mean().iloc[-1]:
         signals.append("Buy")
 
@@ -144,11 +143,11 @@ def technicals_analysis(ticker_input):
     return tech, hist
 
 
-# --------- Streamlit UI ---------
+# ============== Streamlit UI ==============
 st.set_page_config(page_title="Swing Trading + Fundamentals Dashboard", page_icon="📊", layout="wide")
 st.title("📊 Swing Trading + Fundamentals Dashboard")
 
-# --- Sidebar Developer Info ---
+# Sidebar Info
 with st.sidebar:
     st.markdown("### 👨‍💻 Developer Info")
     st.markdown("**Mr. Shivam Maheshwari**")
@@ -158,17 +157,14 @@ with st.sidebar:
     st.write("✉️ 247shivam@gmail.com")
     st.write("📱 +91-9468955596")
 
-# --- Input box ---
 user_input = st.text_input("Enter stock symbol", "RELIANCE").upper()
 
 if st.button("Analyze"):
-    # -------- Swing Trading Analysis --------
     st.header("📈 Swing Trading Analysis")
-
     techs, hist = technicals_analysis(user_input)
     if techs:
 
-        # ✅ Key Highlights as row table (no index)
+        # ✅  Key Trade Highlights without index + no wrapping headers
         st.subheader("🔎 Key Trade Highlights")
         key_high_data = pd.DataFrame([{
             "Candle Pattern": techs["CandlePattern"],
@@ -176,14 +172,27 @@ if st.button("Analyze"):
             "Strength": techs["Strength"],
             "Stoploss": techs["Stoploss"] if techs["Stoploss"] else "NA"
         }])
-        # style: shaded + bold
-        st.table(
-            key_high_data.style.set_table_styles(
-                [{'selector':'th','props':[('background-color','#1f77b4'),('color','white'),('font-weight','bold')]}]
-            ).set_properties(**{'background-color': '#e6f2ff', 'font-weight':'bold'})
-        )
 
-        # Detailed Technicals (with numbering)
+        styled_highlights = key_high_data.style.set_table_styles(
+            [{
+                'selector': 'th',
+                'props': [('background-color', '#1f77b4'),
+                          ('color', 'white'),
+                          ('font-weight', 'bold'),
+                          ('text-align', 'center'),
+                          ('white-space','nowrap')] # ✅ Prevent wrap
+            }]
+        ).set_properties(**{
+            'background-color': '#e6f2ff',
+            'font-weight':'bold',
+            'text-align':'center',
+            'white-space':'nowrap'      # ✅ Prevent wrap in mobile
+        })
+
+        styled_highlights = styled_highlights.hide(axis="index")  # hide row index
+        st.table(styled_highlights)
+
+        # Detailed Technicals with numbering
         st.subheader("📊 Detailed Technicals")
         tech_df = pd.DataFrame([
             ["Open", techs["Open"]],
@@ -198,11 +207,10 @@ if st.button("Analyze"):
             ["MACD Signal", techs["MACD_Signal"]],
             ["ATR", techs["ATR"]],
         ], columns=["Metric","Value"])
-
-        tech_df.index = range(1, len(tech_df)+1)  # numbering
+        tech_df.index = range(1, len(tech_df)+1)
         st.dataframe(tech_df, use_container_width=True)
 
-        # Pivot Levels (with numbering)
+        # Pivot Levels
         piv_df = pd.DataFrame({
             "Level":["Pivot","R1","R2","R3","S1","S2","S3"],
             "Value":[techs["Pivot"],techs["R1"],techs["R2"],techs["R3"],
@@ -219,12 +227,12 @@ if st.button("Analyze"):
     else:
         st.error("❌ No technical data found.")
 
-    # -------- Fundamentals --------
+    # -------- Fundamentals
     st.header("🏦 Fundamentals")
     funds = screener_fundamentals(user_input)
     if funds:
         df_fund = pd.DataFrame(list(funds.items()), columns=["Metric","Value"])
-        df_fund.index = range(1, len(df_fund)+1)   # numbering
+        df_fund.index = range(1, len(df_fund)+1)
         st.dataframe(df_fund.style.background_gradient(cmap="Oranges"), use_container_width=True)
     else:
         st.warning("No fundamentals found.")
