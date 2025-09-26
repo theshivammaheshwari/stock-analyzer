@@ -1,11 +1,12 @@
 import streamlit as st
+from nsetools import Nse
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 import yfinance as yf
 import ta
 
-# --------- Fundamentals Scraper ---------
+# --------- Fundamentals Scraper from Screener ---------
 def screener_fundamentals(stock_code):
     url = f"https://www.screener.in/company/{stock_code}/"
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -26,7 +27,7 @@ def screener_fundamentals(stock_code):
             except:
                 pass
 
-    # Extra factoids
+    # Extra factoids (PEG, Altman etc.)
     factoids = soup.find_all("li", class_="flex flex-space-between")
     for f in factoids:
         try:
@@ -36,7 +37,7 @@ def screener_fundamentals(stock_code):
         except:
             pass
 
-    # Shareholding
+    # Shareholding pattern
     holding_section = soup.find("section", id="shareholding")
     if holding_section:
         rows = holding_section.find_all("tr")
@@ -48,7 +49,7 @@ def screener_fundamentals(stock_code):
     return fundamentals
 
 
-# --------- Technical Analysis ---------
+# --------- Technical Analysis from yfinance ---------
 def technicals_analysis(ticker_input):
     if not ticker_input.endswith(".NS") and "." not in ticker_input:
         ticker = ticker_input + ".NS"
@@ -82,7 +83,7 @@ def technicals_analysis(ticker_input):
     R2 = P + (latest["High"] - latest["Low"]);  S2 = P - (latest["High"] - latest["Low"])
     R3 = latest["High"] + 2*(P - latest["Low"]); S3 = latest["Low"] - 2*(latest["High"] - P)
 
-    # Voting signals
+    # ---- Voting signals ----
     signals = []
     if latest["EMA10"] > latest["EMA20"]: signals.append("Buy")
     elif latest["EMA10"] < latest["EMA20"]: signals.append("Sell")
@@ -143,28 +144,32 @@ def technicals_analysis(ticker_input):
     return tech, hist
 
 
-# ============== Streamlit UI ==============
+# ================= Streamlit UI =================
 st.set_page_config(page_title="Swing Trading + Fundamentals Dashboard", page_icon="📊", layout="wide")
 st.title("📊 Swing Trading + Fundamentals Dashboard")
 
-# Sidebar Info
+# Sidebar info
 with st.sidebar:
     st.markdown("### 👨‍💻 Developer Info")
     st.markdown("**Mr. Shivam Maheshwari**")
     st.write("🔗 [LinkedIn](https://www.linkedin.com/in/theshivammaheshwari)")
     st.write("📸 [Instagram](https://www.instagram.com/theshivammaheshwari)")
     st.write("📘 [Facebook](https://www.facebook.com/theshivammaheshwari)")
-    st.write("✉️ 247shivam@gmail.com")
+    st.write("✉️ theshivammaheshwari@gmail.com")
     st.write("📱 +91-9468955596")
 
-user_input = st.text_input("Enter stock symbol", "RELIANCE").upper()
+# 🔹 NSE auto-suggest using nsetools
+nse = Nse()
+all_stock_codes = list(nse.get_stock_codes().keys())[1:]  # remove header
+
+user_input = st.selectbox("🔍 Search or select stock symbol:", all_stock_codes)
 
 if st.button("Analyze"):
     st.header("📈 Swing Trading Analysis")
     techs, hist = technicals_analysis(user_input)
     if techs:
 
-        # ✅  Key Trade Highlights without index + no wrapping headers
+        # 🔎 Key Highlights without index
         st.subheader("🔎 Key Trade Highlights")
         key_high_data = pd.DataFrame([{
             "Candle Pattern": techs["CandlePattern"],
@@ -172,27 +177,20 @@ if st.button("Analyze"):
             "Strength": techs["Strength"],
             "Stoploss": techs["Stoploss"] if techs["Stoploss"] else "NA"
         }])
+        styled_high = key_high_data.style.set_table_styles(
+            [{'selector':'th','props':[('background-color','#1f77b4'),
+                                       ('color','white'),
+                                       ('font-weight','bold'),
+                                       ('text-align','center'),
+                                       ('white-space','nowrap')]}]
+        ).set_properties(**{'background-color':'#e6f2ff',
+                            'font-weight':'bold',
+                            'text-align':'center',
+                            'white-space':'nowrap'})
+        styled_high = styled_high.hide(axis="index")
+        st.table(styled_high)
 
-        styled_highlights = key_high_data.style.set_table_styles(
-            [{
-                'selector': 'th',
-                'props': [('background-color', '#1f77b4'),
-                          ('color', 'white'),
-                          ('font-weight', 'bold'),
-                          ('text-align', 'center'),
-                          ('white-space','nowrap')] # ✅ Prevent wrap
-            }]
-        ).set_properties(**{
-            'background-color': '#e6f2ff',
-            'font-weight':'bold',
-            'text-align':'center',
-            'white-space':'nowrap'      # ✅ Prevent wrap in mobile
-        })
-
-        styled_highlights = styled_highlights.hide(axis="index")  # hide row index
-        st.table(styled_highlights)
-
-        # Detailed Technicals with numbering
+        # Detailed Technicals (with numbering)
         st.subheader("📊 Detailed Technicals")
         tech_df = pd.DataFrame([
             ["Open", techs["Open"]],
@@ -227,7 +225,7 @@ if st.button("Analyze"):
     else:
         st.error("❌ No technical data found.")
 
-    # -------- Fundamentals
+    # -------- Fundamentals --------
     st.header("🏦 Fundamentals")
     funds = screener_fundamentals(user_input)
     if funds:
