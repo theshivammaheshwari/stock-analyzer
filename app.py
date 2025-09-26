@@ -76,13 +76,13 @@ def technicals_analysis(ticker_input):
     latest = hist.iloc[-1]
     prev   = hist.iloc[-2]
 
-    # -> Pivot Points
+    # Pivot Points
     P = (latest["High"] + latest["Low"] + latest["Close"]) / 3
     R1 = 2*P - latest["Low"];  S1 = 2*P - latest["High"]
     R2 = P + (latest["High"] - latest["Low"]);  S2 = P - (latest["High"] - latest["Low"])
     R3 = latest["High"] + 2*(P - latest["Low"]); S3 = latest["Low"] - 2*(latest["High"] - P)
 
-    # -> Signals
+    # Voting Logic
     signals = []
     if latest["EMA10"] > latest["EMA20"]: signals.append("Buy")
     elif latest["EMA10"] < latest["EMA20"]: signals.append("Sell")
@@ -132,7 +132,8 @@ def technicals_analysis(ticker_input):
         "EMA10": round(latest["EMA10"],2), "EMA20": round(latest["EMA20"],2),
         "RSI": round(latest["RSI"],2), "MACD": round(latest["MACD"],2),
         "MACD_Signal": round(latest["MACD_Signal"],2),
-        "ATR": round(latest["ATR"],2), "CandlePattern": candle_signal,
+        "ATR": round(latest["ATR"],2), 
+        "CandlePattern": candle_signal,
         "Signal": final_signal, "Strength": strength, "Stoploss": stoploss,
         "Pivot": round(P,2), "R1": round(R1,2), "R2": round(R2,2), "R3": round(R3,2),
         "S1": round(S1,2), "S2": round(S2,2), "S3": round(S3,2)
@@ -144,51 +145,62 @@ def technicals_analysis(ticker_input):
 st.set_page_config(page_title="Swing Trading + Fundamentals Dashboard", page_icon="📊", layout="wide")
 st.title("📊 Swing Trading + Fundamentals Dashboard")
 
-# Input
+# --- Sidebar Developer Info ---
+with st.sidebar:
+    st.markdown("### 👨‍💻 Developer Info")
+    st.markdown("**Mr. Shivam Maheshwari**")
+    st.write("🔗 [LinkedIn](https://www.linkedin.com/in/theshivammaheshwari)")
+    st.write("📸 [Instagram](https://www.instagram.com/theshivammaheshwari)")
+    st.write("📘 [Facebook](https://www.facebook.com/theshivammaheshwari)")
+    st.write("✉️ theshivammaheshwari@gmail.com")
+    st.write("📱 +91-9468955596")
+
+# --- Input box ---
 user_input = st.text_input("Enter stock symbol", "RELIANCE").upper()
 
 if st.button("Analyze"):
-    # ---------- SWING TRADING ----------
+    # -------- Swing Trading Analysis --------
     st.header("📈 Swing Trading Analysis")
 
     techs, hist = technicals_analysis(user_input)
     if techs:
-        c1,c2,c3,c4 = st.columns(4)
-        c1.metric("Open", techs["Open"])
-        c2.metric("High", techs["High"])
-        c3.metric("Low", techs["Low"])
-        c4.metric("Close", techs["Close"])
+        # Show technicals as a neat table
+        tech_df = pd.DataFrame([
+            ["Open", techs["Open"]],
+            ["High", techs["High"]],
+            ["Low", techs["Low"]],
+            ["Close", techs["Close"]],
+            ["Volume", techs["Volume"]],
+            ["EMA10", techs["EMA10"]],
+            ["EMA20", techs["EMA20"]],
+            ["RSI", techs["RSI"]],
+            ["MACD", techs["MACD"]],
+            ["MACD Signal", techs["MACD_Signal"]],
+            ["ATR", techs["ATR"]],
+            ["Candle Pattern", techs["CandlePattern"]],
+            ["Signal", techs["Signal"]],
+            ["Strength", techs["Strength"]],
+            ["Stoploss", techs["Stoploss"]],
+        ], columns=["Metric","Value"])
 
-        r1,r2,r3,r4 = st.columns(4)
-        r1.metric("EMA10", techs["EMA10"])
-        r2.metric("EMA20", techs["EMA20"])
-        r3.metric("RSI", techs["RSI"])
-        r4.metric("Volume", techs["Volume"])
+        st.dataframe(tech_df.style.background_gradient(cmap="YlGnBu"), use_container_width=True)
 
-        r5,r6,r7 = st.columns(3)
-        r5.metric("MACD", techs["MACD"])
-        r6.metric("MACD Signal", techs["MACD_Signal"])
-        r7.metric("ATR", techs["ATR"])
-
-        st.success(f"Signal: {techs['Signal']} | Strength: {techs['Strength']}")
-        st.info(f"Candle Pattern: {techs['CandlePattern']}")
-        if techs["Stoploss"]:
-            st.warning(f"Suggested Stoploss: {techs['Stoploss']}")
-
-        st.subheader("Pivot Levels")
+        # Pivot table
         piv_df = pd.DataFrame({
             "Level":["Pivot","R1","R2","R3","S1","S2","S3"],
-            "Value":[techs["Pivot"],techs["R1"],techs["R2"],
-                    techs["R3"],techs["S1"],techs["S2"],techs["S3"]]
+            "Value":[techs["Pivot"],techs["R1"],techs["R2"],techs["R3"],techs["S1"],techs["S2"],techs["S3"]]
         })
-        st.dataframe(piv_df.style.background_gradient(cmap="YlGnBu"), use_container_width=True)
+        st.subheader("Pivot Levels")
+        st.dataframe(piv_df.style.background_gradient(cmap="Blues"), use_container_width=True)
 
+        # Chart
         st.subheader("Price Chart (6 months)")
         st.line_chart(hist[["Close","EMA10","EMA20"]])
+
     else:
         st.error("❌ No technical data found.")
 
-    # ---------- FUNDAMENTALS ----------
+    # -------- Fundamentals --------
     st.header("🏦 Fundamentals")
     funds = screener_fundamentals(user_input)
     if funds:
@@ -196,19 +208,3 @@ if st.button("Analyze"):
         st.dataframe(df_fund.style.background_gradient(cmap="Oranges"), use_container_width=True)
     else:
         st.warning("No fundamentals found.")
-
-    # ---------- Developer Info ----------
-    st.markdown("---")
-    st.markdown(
-        """
-        ### 👨‍💻 This website was developed by  
-        **Mr. Shivam Maheshwari**
-
-        📌 **Name:** Mr. Shivam Maheshwari  
-        🔗 **LinkedIn:** [linkedin.com/in/theshivammaheshwari](https://www.linkedin.com/in/theshivammaheshwari)  
-        📱 **Phone:** +91-9468955596  
-        ✉️ **Email:** [theshivammaheshwari@gmail.com](mailto:theshivammaheshwari@gmail.com)  
-        📸 **Instagram:** [instagram.com/theshivammaheshwari](https://www.instagram.com/theshivammaheshwari)  
-        📘 **Facebook:** [facebook.com/theshivammaheshwari](https://www.facebook.com/theshivammaheshwari)  
-        """
-    )
