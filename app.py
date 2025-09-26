@@ -5,7 +5,7 @@ import pandas as pd
 import yfinance as yf
 import ta
 
-# --------- Scrape Fundamentals from Screener ---------
+# --------- Fundamentals Scraper ---------
 def screener_fundamentals(stock_code):
     url = f"https://www.screener.in/company/{stock_code}/"
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -155,7 +155,7 @@ with st.sidebar:
     st.write("🔗 [LinkedIn](https://www.linkedin.com/in/theshivammaheshwari)")
     st.write("📸 [Instagram](https://www.instagram.com/theshivammaheshwari)")
     st.write("📘 [Facebook](https://www.facebook.com/theshivammaheshwari)")
-    st.write("✉️ theshivammaheshwari@gmail.com")
+    st.write("✉️ 247shivam@gmail.com")
     st.write("📱 +91-9468955596")
 
 # --- Input box ---
@@ -168,7 +168,7 @@ if st.button("Analyze"):
     techs, hist = technicals_analysis(user_input)
     if techs:
 
-        # ✅ Key Highlights as row table
+        # ✅ Key Highlights as row table (no index)
         st.subheader("🔎 Key Trade Highlights")
         key_high_data = pd.DataFrame([{
             "Candle Pattern": techs["CandlePattern"],
@@ -176,9 +176,14 @@ if st.button("Analyze"):
             "Strength": techs["Strength"],
             "Stoploss": techs["Stoploss"] if techs["Stoploss"] else "NA"
         }])
-        st.table(key_high_data)   # Static clean table
+        # style: shaded + bold
+        st.table(
+            key_high_data.style.set_table_styles(
+                [{'selector':'th','props':[('background-color','#1f77b4'),('color','white'),('font-weight','bold')]}]
+            ).set_properties(**{'background-color': '#e6f2ff', 'font-weight':'bold'})
+        )
 
-        # Detailed Technicals
+        # Detailed Technicals (with numbering)
         st.subheader("📊 Detailed Technicals")
         tech_df = pd.DataFrame([
             ["Open", techs["Open"]],
@@ -194,14 +199,16 @@ if st.button("Analyze"):
             ["ATR", techs["ATR"]],
         ], columns=["Metric","Value"])
 
-        st.dataframe(tech_df, use_container_width=True)   # no gradient, clean Volume
+        tech_df.index = range(1, len(tech_df)+1)  # numbering
+        st.dataframe(tech_df, use_container_width=True)
 
-        # Pivot Levels
+        # Pivot Levels (with numbering)
         piv_df = pd.DataFrame({
             "Level":["Pivot","R1","R2","R3","S1","S2","S3"],
             "Value":[techs["Pivot"],techs["R1"],techs["R2"],techs["R3"],
                      techs["S1"],techs["S2"],techs["S3"]]
         })
+        piv_df.index = range(1, len(piv_df)+1)
         st.subheader("Pivot Levels")
         st.dataframe(piv_df.style.background_gradient(cmap="Blues"), use_container_width=True)
 
@@ -217,6 +224,7 @@ if st.button("Analyze"):
     funds = screener_fundamentals(user_input)
     if funds:
         df_fund = pd.DataFrame(list(funds.items()), columns=["Metric","Value"])
+        df_fund.index = range(1, len(df_fund)+1)   # numbering
         st.dataframe(df_fund.style.background_gradient(cmap="Oranges"), use_container_width=True)
     else:
         st.warning("No fundamentals found.")
