@@ -1,5 +1,4 @@
 import streamlit as st
-from nsetools import Nse
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
@@ -27,7 +26,7 @@ def screener_fundamentals(stock_code):
             except:
                 pass
 
-    # Extra factoids (PEG, Altman etc.)
+    # Extra factoids
     factoids = soup.find_all("li", class_="flex flex-space-between")
     for f in factoids:
         try:
@@ -158,10 +157,11 @@ with st.sidebar:
     st.write("✉️ theshivammaheshwari@gmail.com")
     st.write("📱 +91-9468955596")
 
-# 🔹 NSE auto-suggest using nsetools
-nse = Nse()
-all_stock_codes = list(nse.get_stock_codes().keys())[1:]  # remove header
+# 🔹 Load NSE symbols from CSV
+symbols_df = pd.read_csv("nse_stock_list.csv")   # file present in repo
+all_stock_codes = symbols_df["Symbol"].tolist()
 
+# 🔹 Auto-suggest search dropdown
 user_input = st.selectbox("🔍 Search or select stock symbol:", all_stock_codes)
 
 if st.button("Analyze"):
