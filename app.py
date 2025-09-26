@@ -154,22 +154,25 @@ with st.sidebar:
     st.write("🔗 [LinkedIn](https://www.linkedin.com/in/theshivammaheshwari)")
     st.write("📸 [Instagram](https://www.instagram.com/theshivammaheshwari)")
     st.write("📘 [Facebook](https://www.facebook.com/theshivammaheshwari)")
-    st.write("✉️ 247shivam@gmail.com")
+    st.write("✉️ theshivammaheshwari@gmail.com")
     st.write("📱 +91-9468955596")
 
-# 🔹 Load NSE symbols from CSV
-symbols_df = pd.read_csv("nse_stock_list.csv")   # file present in repo
-all_stock_codes = symbols_df["Symbol"].tolist()
+# 🔹 Load CSV that has SYMBOL and NAME OF COMPANY columns
+symbols_df = pd.read_csv("nse_stock_list.csv")
+
+all_stock_codes = symbols_df["SYMBOL"].dropna().astype(str).tolist()   # dropdown list
+symbol_to_name = dict(zip(symbols_df["SYMBOL"], symbols_df["NAME OF COMPANY"]))  # mapping dict
 
 # 🔹 Auto-suggest search dropdown
 user_input = st.selectbox("🔍 Search or select stock symbol:", all_stock_codes)
 
 if st.button("Analyze"):
-    st.header("📈 Swing Trading Analysis")
+    company_name = symbol_to_name.get(user_input, "")
+    st.header(f"📈 Swing Trading Analysis - {company_name} ({user_input})")
+
     techs, hist = technicals_analysis(user_input)
     if techs:
-
-        # 🔎 Key Highlights without index
+        # 🔎 Key Highlights
         st.subheader("🔎 Key Trade Highlights")
         key_high_data = pd.DataFrame([{
             "Candle Pattern": techs["CandlePattern"],
@@ -190,7 +193,7 @@ if st.button("Analyze"):
         styled_high = styled_high.hide(axis="index")
         st.table(styled_high)
 
-        # Detailed Technicals (with numbering)
+        # Detailed Technicals
         st.subheader("📊 Detailed Technicals")
         tech_df = pd.DataFrame([
             ["Open", techs["Open"]],
@@ -221,12 +224,11 @@ if st.button("Analyze"):
         # Chart
         st.subheader("Price Chart (6 months)")
         st.line_chart(hist[["Close","EMA10","EMA20"]])
-
     else:
         st.error("❌ No technical data found.")
 
     # -------- Fundamentals --------
-    st.header("🏦 Fundamentals")
+    st.header(f"🏦 Fundamentals - {company_name} ({user_input})")
     funds = screener_fundamentals(user_input)
     if funds:
         df_fund = pd.DataFrame(list(funds.items()), columns=["Metric","Value"])

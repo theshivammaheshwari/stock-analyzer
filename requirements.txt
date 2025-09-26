@@ -1,8 +1,7 @@
 streamlit
-yfinance
 pandas
+yfinance
 ta
 beautifulsoup4
 requests
 matplotlib
-nsetools
