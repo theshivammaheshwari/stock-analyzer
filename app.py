@@ -5,7 +5,7 @@ import pandas as pd
 import yfinance as yf
 import ta
 
-# --------- Scrape Fundamentals from Screener ---------
+# --------- Fundamentals Scraper ---------
 def screener_fundamentals(stock_code):
     url = f"https://www.screener.in/company/{stock_code}/"
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -26,7 +26,7 @@ def screener_fundamentals(stock_code):
             except:
                 pass
 
-    # Factoids (PEG, Altman etc.)
+    # Extra factoids (PEG, Z-score etc.)
     factoids = soup.find_all("li", class_="flex flex-space-between")
     for f in factoids:
         try:
@@ -36,7 +36,7 @@ def screener_fundamentals(stock_code):
         except:
             pass
 
-    # Shareholding
+    # Shareholding pattern
     holding_section = soup.find("section", id="shareholding")
     if holding_section:
         rows = holding_section.find_all("tr")
@@ -48,7 +48,7 @@ def screener_fundamentals(stock_code):
     return fundamentals
 
 
-# --------- Technical Analysis using yfinance ---------
+# --------- Technical Analysis ---------
 def technicals_analysis(ticker_input):
     if not ticker_input.endswith(".NS") and "." not in ticker_input:
         ticker = ticker_input + ".NS"
@@ -82,7 +82,7 @@ def technicals_analysis(ticker_input):
     R2 = P + (latest["High"] - latest["Low"]);  S2 = P - (latest["High"] - latest["Low"])
     R3 = latest["High"] + 2*(P - latest["Low"]); S3 = latest["Low"] - 2*(latest["High"] - P)
 
-    # Voting Logic
+    # ---- Voting signals ----
     signals = []
     if latest["EMA10"] > latest["EMA20"]: signals.append("Buy")
     elif latest["EMA10"] < latest["EMA20"]: signals.append("Sell")
@@ -96,7 +96,7 @@ def technicals_analysis(ticker_input):
     if latest["Volume"] > hist["Volume"].rolling(20).mean().iloc[-1]:
         signals.append("Buy")
 
-    # Candle
+    # Candle Pattern detection
     candle_signal = "None"
     if (latest["Close"] > latest["Open"] and prev["Close"] < prev["Open"] 
         and latest["Close"] > prev["Open"] and latest["Open"] < prev["Close"]):
@@ -132,9 +132,11 @@ def technicals_analysis(ticker_input):
         "EMA10": round(latest["EMA10"],2), "EMA20": round(latest["EMA20"],2),
         "RSI": round(latest["RSI"],2), "MACD": round(latest["MACD"],2),
         "MACD_Signal": round(latest["MACD_Signal"],2),
-        "ATR": round(latest["ATR"],2), 
+        "ATR": round(latest["ATR"],2),
         "CandlePattern": candle_signal,
-        "Signal": final_signal, "Strength": strength, "Stoploss": stoploss,
+        "Signal": final_signal,
+        "Strength": strength,
+        "Stoploss": stoploss,
         "Pivot": round(P,2), "R1": round(R1,2), "R2": round(R2,2), "R3": round(R3,2),
         "S1": round(S1,2), "S2": round(S2,2), "S3": round(S3,2)
     }
@@ -152,7 +154,7 @@ with st.sidebar:
     st.write("🔗 [LinkedIn](https://www.linkedin.com/in/theshivammaheshwari)")
     st.write("📸 [Instagram](https://www.instagram.com/theshivammaheshwari)")
     st.write("📘 [Facebook](https://www.facebook.com/theshivammaheshwari)")
-    st.write("✉️ theshivammaheshwari@gmail.com")
+    st.write("✉️ 247shivam@gmail.com")
     st.write("📱 +91-9468955596")
 
 # --- Input box ---
@@ -164,7 +166,17 @@ if st.button("Analyze"):
 
     techs, hist = technicals_analysis(user_input)
     if techs:
-        # Show technicals as a neat table
+
+        # ✅ Highlight important 4 features up-front (Candle, Signal, Strength, Stoploss)
+        st.subheader("🔎 Key Trade Highlights")
+        c1,c2,c3,c4 = st.columns(4)
+        c1.metric("Candle Pattern", techs["CandlePattern"])
+        c2.metric("Signal", techs["Signal"])
+        c3.metric("Strength", techs["Strength"])
+        c4.metric("Stoploss", techs["Stoploss"] if techs["Stoploss"] else "NA")
+
+        # Then show rest data in a table
+        st.subheader("📊 Detailed Technicals")
         tech_df = pd.DataFrame([
             ["Open", techs["Open"]],
             ["High", techs["High"]],
@@ -177,10 +189,6 @@ if st.button("Analyze"):
             ["MACD", techs["MACD"]],
             ["MACD Signal", techs["MACD_Signal"]],
             ["ATR", techs["ATR"]],
-            ["Candle Pattern", techs["CandlePattern"]],
-            ["Signal", techs["Signal"]],
-            ["Strength", techs["Strength"]],
-            ["Stoploss", techs["Stoploss"]],
         ], columns=["Metric","Value"])
 
         st.dataframe(tech_df.style.background_gradient(cmap="YlGnBu"), use_container_width=True)
@@ -188,7 +196,8 @@ if st.button("Analyze"):
         # Pivot table
         piv_df = pd.DataFrame({
             "Level":["Pivot","R1","R2","R3","S1","S2","S3"],
-            "Value":[techs["Pivot"],techs["R1"],techs["R2"],techs["R3"],techs["S1"],techs["S2"],techs["S3"]]
+            "Value":[techs["Pivot"],techs["R1"],techs["R2"],techs["R3"],
+                     techs["S1"],techs["S2"],techs["S3"]]
         })
         st.subheader("Pivot Levels")
         st.dataframe(piv_df.style.background_gradient(cmap="Blues"), use_container_width=True)
