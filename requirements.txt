@@ -5,3 +5,4 @@ ta
 beautifulsoup4
 requests
 matplotlib
+nsetools
