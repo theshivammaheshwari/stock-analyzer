@@ -1,4 +1,3 @@
-# app.py
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
@@ -6,7 +5,7 @@ import pandas as pd
 import yfinance as yf
 import ta
 
-# --------- Function: Fundamentals from Screener ---------
+# --------- Scrape Fundamentals from Screener ---------
 def screener_fundamentals(stock_code):
     url = f"https://www.screener.in/company/{stock_code}/"
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -27,7 +26,7 @@ def screener_fundamentals(stock_code):
             except:
                 pass
 
-    # Factoids (PEG, Z-score etc.)
+    # Factoids (PEG, Altman etc.)
     factoids = soup.find_all("li", class_="flex flex-space-between")
     for f in factoids:
         try:
@@ -37,7 +36,7 @@ def screener_fundamentals(stock_code):
         except:
             pass
 
-    # Shareholding pattern
+    # Shareholding
     holding_section = soup.find("section", id="shareholding")
     if holding_section:
         rows = holding_section.find_all("tr")
@@ -49,7 +48,7 @@ def screener_fundamentals(stock_code):
     return fundamentals
 
 
-# --------- Function: Technical analysis ---------
+# --------- Technical Analysis using yfinance ---------
 def technicals_analysis(ticker_input):
     if not ticker_input.endswith(".NS") and "." not in ticker_input:
         ticker = ticker_input + ".NS"
@@ -62,6 +61,7 @@ def technicals_analysis(ticker_input):
     if hist.empty:
         return None, None
 
+    # Indicators
     hist["EMA10"] = hist["Close"].ewm(span=10).mean()
     hist["EMA20"] = hist["Close"].ewm(span=20).mean()
     hist["RSI"]   = ta.momentum.RSIIndicator(hist["Close"], window=14).rsi()
@@ -76,12 +76,13 @@ def technicals_analysis(ticker_input):
     latest = hist.iloc[-1]
     prev   = hist.iloc[-2]
 
-    # Pivot
+    # -> Pivot Points
     P = (latest["High"] + latest["Low"] + latest["Close"]) / 3
     R1 = 2*P - latest["Low"];  S1 = 2*P - latest["High"]
     R2 = P + (latest["High"] - latest["Low"]);  S2 = P - (latest["High"] - latest["Low"])
     R3 = latest["High"] + 2*(P - latest["Low"]); S3 = latest["Low"] - 2*(latest["High"] - P)
 
+    # -> Signals
     signals = []
     if latest["EMA10"] > latest["EMA20"]: signals.append("Buy")
     elif latest["EMA10"] < latest["EMA20"]: signals.append("Sell")
@@ -92,11 +93,10 @@ def technicals_analysis(ticker_input):
     if latest["MACD"] > latest["MACD_Signal"]: signals.append("Buy")
     elif latest["MACD"] < latest["MACD_Signal"]: signals.append("Sell")
 
-    # Current vs Avg Volume
     if latest["Volume"] > hist["Volume"].rolling(20).mean().iloc[-1]:
         signals.append("Buy")
 
-    # Candlestick
+    # Candle
     candle_signal = "None"
     if (latest["Close"] > latest["Open"] and prev["Close"] < prev["Open"] 
         and latest["Close"] > prev["Open"] and latest["Open"] < prev["Close"]):
@@ -144,22 +144,21 @@ def technicals_analysis(ticker_input):
 st.set_page_config(page_title="Swing Trading + Fundamentals Dashboard", page_icon="📊", layout="wide")
 st.title("📊 Swing Trading + Fundamentals Dashboard")
 
+# Input
 user_input = st.text_input("Enter stock symbol", "RELIANCE").upper()
-if st.button("Analyze"):
 
-    # -------- Swing Trading (Technicals) FIRST --------
+if st.button("Analyze"):
+    # ---------- SWING TRADING ----------
     st.header("📈 Swing Trading Analysis")
 
     techs, hist = technicals_analysis(user_input)
     if techs:
-        # show OHLC metrics
         c1,c2,c3,c4 = st.columns(4)
         c1.metric("Open", techs["Open"])
         c2.metric("High", techs["High"])
         c3.metric("Low", techs["Low"])
         c4.metric("Close", techs["Close"])
 
-        # More key indicators in row2
         r1,r2,r3,r4 = st.columns(4)
         r1.metric("EMA10", techs["EMA10"])
         r2.metric("EMA20", techs["EMA20"])
@@ -171,13 +170,11 @@ if st.button("Analyze"):
         r6.metric("MACD Signal", techs["MACD_Signal"])
         r7.metric("ATR", techs["ATR"])
 
-        # Signal highlight
         st.success(f"Signal: {techs['Signal']} | Strength: {techs['Strength']}")
         st.info(f"Candle Pattern: {techs['CandlePattern']}")
         if techs["Stoploss"]:
             st.warning(f"Suggested Stoploss: {techs['Stoploss']}")
 
-        # Pivot table (colorful)
         st.subheader("Pivot Levels")
         piv_df = pd.DataFrame({
             "Level":["Pivot","R1","R2","R3","S1","S2","S3"],
@@ -186,13 +183,12 @@ if st.button("Analyze"):
         })
         st.dataframe(piv_df.style.background_gradient(cmap="YlGnBu"), use_container_width=True)
 
-        # Chart
         st.subheader("Price Chart (6 months)")
         st.line_chart(hist[["Close","EMA10","EMA20"]])
     else:
         st.error("❌ No technical data found.")
 
-    # -------- Fundamentals (after technicals) --------
+    # ---------- FUNDAMENTALS ----------
     st.header("🏦 Fundamentals")
     funds = screener_fundamentals(user_input)
     if funds:
@@ -200,3 +196,19 @@ if st.button("Analyze"):
         st.dataframe(df_fund.style.background_gradient(cmap="Oranges"), use_container_width=True)
     else:
         st.warning("No fundamentals found.")
+
+    # ---------- Developer Info ----------
+    st.markdown("---")
+    st.markdown(
+        """
+        ### 👨‍💻 This website was developed by  
+        **Mr. Shivam Maheshwari**
+
+        📌 **Name:** Mr. Shivam Maheshwari  
+        🔗 **LinkedIn:** [linkedin.com/in/theshivammaheshwari](https://www.linkedin.com/in/theshivammaheshwari)  
+        📱 **Phone:** +91-9468955596  
+        ✉️ **Email:** [theshivammaheshwari@gmail.com](mailto:theshivammaheshwari@gmail.com)  
+        📸 **Instagram:** [instagram.com/theshivammaheshwari](https://www.instagram.com/theshivammaheshwari)  
+        📘 **Facebook:** [facebook.com/theshivammaheshwari](https://www.facebook.com/theshivammaheshwari)  
+        """
+    )
